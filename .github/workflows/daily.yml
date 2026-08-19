@@ -22,8 +22,8 @@ jobs:
 
       - name: Commit changes
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "snmallick2401"
+          git config user.email "135153061+snmallick2401@users.noreply.github.com"
           git add daily-activity.txt
           git commit -m "Update daily activity" || exit 0
           git push
