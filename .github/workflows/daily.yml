@@ -1,12 +1,22 @@
+# Daily Activity
+
 name: Daily Activity
 
 on:
   schedule:
-    - cron: "30 18 * * *"
+    # Run once each day.
+    # 06:17 UTC = 11:47 PM? No — 06:17 UTC is 11:47 AM IST.
+    # Using a non-round minute helps avoid heavy hourly load.
+    - cron: "17 6 * * *"
+
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: daily-activity
+  queue: max
 
 jobs:
   update:
@@ -16,14 +26,62 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Update daily activity
+      - name: Create daily commits
+        shell: bash
         run: |
-          echo "$(date -u '+%Y-%m-%d')" >> daily-activity.txt
+          set -e
 
-      - name: Commit changes
-        run: |
+          # Determine today's weekday in UTC:
+          # 0 = Sunday
+          # 1 = Monday
+          # 2 = Tuesday
+          # 3 = Wednesday
+          # 4 = Thursday
+          # 5 = Friday
+          # 6 = Saturday
+          DAY=$(date -u '+%w')
+
+          case "$DAY" in
+            0) COMMITS=1 ;;  # Sunday
+            1) COMMITS=3 ;;  # Monday
+            2) COMMITS=6 ;;  # Tuesday
+            3) COMMITS=8 ;;  # Wednesday
+            4) COMMITS=4 ;;  # Thursday
+            5) COMMITS=2 ;;  # Friday
+            6) COMMITS=5 ;;  # Saturday
+            *) echo "Invalid weekday"; exit 1 ;;
+          esac
+
+          echo "Today is weekday $DAY"
+          echo "Creating $COMMITS commits"
+
           git config user.name "snmallick2401"
           git config user.email "135153061+snmallick2401@users.noreply.github.com"
-          git add daily-activity.txt
-          git commit -m "Update daily activity" || exit 0
-          git push
+
+          for i in $(seq 1 "$COMMITS"); do
+            echo "$(date -u '+%Y-%m-%d %H:%M:%S UTC') - commit $i of $COMMITS" >> daily-activity.txt
+
+            git add daily-activity.txt
+            git commit -m "Update daily activity ($i/$COMMITS)"
+
+            # Small delay so every commit has its own timestamp.
+            sleep 5
+          done
+
+      - name: Push commits
+        shell: bash
+        run: |
+          set -e
+
+          for attempt in 1 2 3; do
+            if git push; then
+              echo "Push succeeded."
+              exit 0
+            fi
+
+            echo "Push failed. Retrying in 10 seconds..."
+            sleep 10
+          done
+
+          echo "Push failed after 3 attempts."
+          exit 1
